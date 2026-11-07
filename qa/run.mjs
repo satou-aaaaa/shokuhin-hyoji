@@ -45,6 +45,7 @@ const FIRST_DAY = '[["shomi|cookie-3","allergy|soba-えび","hozon|milk-1","ym|s
       if (want.length !== 1 || want[0] !== P.ans || P.opts.includes("カシューナッツ")) why.push("義務・すすめの答えがちがう（カシューナッツは経過措置があるので出さない）"); }
     if (q.kind === "shohi" && row("消費期限") === "") why.push("消費期限の問題なのに賞味期限のラベル");
     if (q.kind === "shomi" && row("賞味期限") === "") why.push("賞味期限の問題なのに消費期限のラベル");
+    if (q.kind === "per" && /-u$/.test(q.key)) { const u = c.nut[0].replace("あたり", ""), v = row("内容量"); if (u === v || u.includes(`（${v}）`)) why.push("表示の量と内容量の全部が同じで、答えが2つになる"); }
     if (q.kind === "tenka" && !("、" + (row("原材料名").split(" / ")[1] || "") + "、").includes("、" + P.ans + "、")) why.push("添加物の答えが「/」より後ろに無い");
     if (why.length) bad.push(q.key + "：" + why.join("・"));
   }

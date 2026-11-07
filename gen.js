@@ -132,6 +132,7 @@
   });
   P.filter((p) => !/^(100g|1袋|1食|1缶|1包装)/.test(p.n[0])).forEach((p) => {
     const unit = p.n[0].replace("あたり", "");
+    if (unit === p.vol || unit.includes(`（${p.vol}）`)) return; // 表示の量が内容量の全部と同じなら、どちらの選び肢も正しくなる
     add("per", p.id + "-u", { scene: label(p, dateOf(p), { nut: true }), text: `表示の熱量（${p.n[1]}kcal）は、どれだけ食べたときの数？`,
       opts: [unit, `内容量の全部（${p.vol}）`, "100g"].filter((x, i, a) => a.indexOf(x) === i), ans: unit, src: ["nut"],
       why: `栄養成分表示の上に「${p.n[0]}」と書いてあります。袋全部の数とは限らないので、まずここを見ます。` });
