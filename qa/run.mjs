@@ -310,6 +310,7 @@ try {
   }
 
   // スマホ幅・とても大きい文字でもはみ出さない・押す所は44px以上
+  // 高さは丸めてくらべる（出てくる動きの途中で 8.18px のような端数ずれがあると、44px の枠が 43.99… と測れて落ちていた。2026-11-17）
   {
     const bad = [], small = [];
     for (const [w, fs] of [[320, 3], [390, 2], [320, 1]]) {
@@ -321,7 +322,7 @@ try {
         await q.waitForTimeout(100);
         const ov = await q.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
         if (ov > 0) bad.push(`${w}px 文字${fs} ${go || "ホーム"} ${ov}px`);
-        small.push(...(await q.$$eval("button:not([disabled]), a[href]", (bs) => bs.filter((b) => b.checkVisibility() && !b.closest(".cal")).filter((b) => b.getBoundingClientRect().height < 44).map((b) => (b.id || b.className || b.textContent).slice(0, 20)))).map((x) => `${w}/${fs}/${go}:${x}`));
+        small.push(...(await q.$$eval("button:not([disabled]), a[href]", (bs) => bs.filter((b) => b.checkVisibility() && !b.closest(".cal")).filter((b) => Math.round(b.getBoundingClientRect().height) < 44).map((b) => (b.id || b.className || b.textContent).slice(0, 20)))).map((x) => `${w}/${fs}/${go}:${x}`));
       }
       await q.context().close();
     }
