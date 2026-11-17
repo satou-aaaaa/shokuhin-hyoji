@@ -356,6 +356,35 @@ try {
     check("キーボードだけで選んで答えられる", await q.locator(".verdict").count() === 1);
     await q.context().close();
   }
+  {
+    // ヒント2で消した選び肢は、残ったまちがいを選んでも戻らない（cutOf がまちがいの数で消すものを変えていた。shared-workflows incidents/2026-11-07-hint-cut-comes-back.md）
+    const q = await newPage(); await closeHow(q); await q.click("#go-e");
+    const three = async () => { for (let k = 0; k < 40 && await q.locator(".ch").count() < 3; k++) { await solve(q); await q.click("#next"); } return await q.locator(".ch").count() >= 3; };
+    await three();
+    await q.click("#hint"); await q.click("#hint");
+    const cutN = await q.locator(".ch.ng").count();
+    const ai0 = await ansIdx(q), rest = await q.$$eval(".ch:not(.ng)", (b, a) => b.map((x) => +x.dataset.j).filter((j) => j !== a), ai0);
+    await q.click(`.ch[data-j="${rest[0]}"]`); await q.waitForTimeout(100);
+    const left = await q.$$eval(".ch:not(.ng)", (b) => b.map((x) => +x.dataset.j)), ai = await ansIdx(q), all = await q.locator(".ch").count();
+    check("ヒント2のあとに残ったまちがいを選ぶと、正解だけが残り、消した選び肢は戻らない", cutN === all - 2 && left.length === 1 && left[0] === ai, `${all}択・消した${cutN}・残り${left.join(",")}・正解${ai}`);
+    // のこりの数は、いま押せる選び肢の数（最後のまちがいを先に選んでからヒント2回なら1つ）
+    await solve(q); await q.click("#next"); await three();
+    const lastWrong = await q.evaluate(() => { const c = __km.cur(); let j = -1; c.P.opts.forEach((o, k) => { if (o !== c.P.ans) j = k; }); return j; });
+    await q.click(`.ch[data-j="${lastWrong}"]`); await q.click("#hint"); await q.click("#hint");
+    const say = await q.textContent("#hintbox");
+    check("最後のまちがいを先に選んでからヒントを2回使うと「のこりは1つ」", say.includes("のこりは1つ") && await q.locator(".ch:not(.ng)").count() === 1, say);
+    await q.context().close();
+  }
+  {
+    // とことんで正解した直後（次へを押す前）でも「ここで降りる」で終えられ、正解した1件が数に入る（2026-11-07 kyuyo-meisai #1 の CodeRabbit）
+    const q = await newPage(); await closeHow(q); await q.click("#go-e");
+    await solve(q);
+    const label = await q.textContent("#quit");
+    await q.click("#quit"); await q.waitForTimeout(150);
+    const s = await mem(q);
+    check("とことんで正解した直後に「ここで降りる」を押すと結果の画面になり、正解した1問が数に入る（ボタンの数も1問）", label.includes("1問で終える") && await q.locator("#eres").count() === 1 && (await q.textContent("#eres")).includes("1問") && (await q.textContent("#app")).includes("答えた問題 1問") && s.ebest === 1 && !s.runs.e, label);
+    await q.context().close();
+  }
 } catch (e) { check("ブラウザでの検査が最後まで動く", false, e.stack.split("\n").slice(0, 3).join(" ")); }
 
 // 引き継ぎコード（shared-workflows template/qa/transfer-check.mjs）
@@ -368,6 +397,27 @@ try {
       const v = await r.evaluate(() => { const e = [...document.querySelectorAll(".title")].find((x) => x.offsetParent); if (!e) return null; const h = e.getBoundingClientRect().height; const f = e.style.flex; e.style.flex = "none"; const n = e.getBoundingClientRect().height; e.style.flex = f; return h - n; });
       if (v === null || v > 4) big.push(`${w}x${h}:${v === null ? "題なし" : "+" + Math.round(v) + "px"}`); }
     check("ホームの題は縦長の画面でも縦に伸びない（820×1180・390×844・1280×800）", big.length === 0, big.join(" ")); await c.close(); }
+  try { // 保存できないとき：帯 #savewarn で知らせ、2秒たっても残し、保存できるようになったら消す（黙っていると開き直したとき記録が消える。shared-workflows incidents/2026-11-07-save-failure-silent.md）
+    const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    await c.addInitScript(() => { window.__origSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new Error("QuotaExceededError"); }; });
+    const q = await c.newPage(); await q.goto(url); await q.waitForTimeout(300);
+    if (!(await q.locator("#howto[open]").count())) await q.click("#f-how");
+    await q.click("#howto-ok"); await q.waitForTimeout(100);
+    const n1 = await q.locator("#savewarn").count(); await q.waitForTimeout(2000); const n2 = await q.locator("#savewarn").count();
+    await q.evaluate(() => { Storage.prototype.setItem = window.__origSetItem; });
+    await q.click("#f-how"); await q.click("#howto-ok"); await q.waitForTimeout(100);
+    const n3 = await q.locator("#savewarn").count();
+    check("保存できないときは帯（#savewarn）を1つ出し、2秒たっても残る。保存できるようになると消える", n1 === 1 && n2 === 1 && n3 === 0, [n1, n2, n3].join(","));
+    await c.close();
+  } catch (e) { check("保存できないときは帯（#savewarn）を1つ出し、2秒たっても残る。保存できるようになると消える", false, e.message.split("\n")[0]); }
+  try { // 知らせ（.toast）が出ているあいだも、その下のボタンを押せる（pointer-events:none。2026-11-17 全ゲームの点検）
+    const c = await browser.newContext({ viewport: { width: 390, height: 844 } });
+    const q = await c.newPage(); await q.goto(url); await q.waitForTimeout(300);
+    await q.evaluate(() => { const d = document.getElementById("howto"); if (d && d.open) d.close(); toast("知らせの検査"); });
+    const t = await q.evaluate(() => { const e = document.querySelector(".toast"); if (!e) return "知らせが出ない"; const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return [getComputedStyle(e).pointerEvents, hit && (hit === e || e.contains(hit)) ? "知らせが受ける" : "下が受ける"].join(","); });
+    check("知らせ（.toast）が出ているあいだも、その下を押せる（pointer-events が none）", t === "none,下が受ける", t);
+    await c.close();
+  } catch (e) { check("知らせ（.toast）が出ているあいだも、その下を押せる（pointer-events が none）", false, e.message.split("\n")[0]); }
 await browser.close();
 server.close();
 check("画面のエラーが無い", errors.length === 0, errors.slice(0, 3).join(" | "));
